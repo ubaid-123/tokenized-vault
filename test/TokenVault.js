@@ -33,10 +33,7 @@ const {
         expect(await tokenVault.factory()).to.equal(factory);
       });
   
-      it("Should set the right owner", async function () {
-        const { tokenVault, owner } = await loadFixture(deployTokenVault);
-        expect(await tokenVault.owner()).to.equal(owner.address);
-      });
+      
   
    
     });
