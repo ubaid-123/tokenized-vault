@@ -179,6 +179,7 @@ describe("TokenVault", function () {
   const SUSHI_ADDRESS = "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2";
   const FACTORY = "0xbACEB8eC6b9355Dfc0269C18bac9d6E2Bdc29C4F";
   const DAI_ADDRESS = "0x6b175474e89094c44da98b954eedeac495271d0f";
+  const UNI_ADDRESS = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984";
 
   async function depositEth(sender, recipient, amount) {
     const weiAmount = ethers.parseEther(String(amount));
@@ -214,11 +215,13 @@ describe("TokenVault", function () {
       SUSHI_BAR_ADDRESS
     );
     const daiTokenContract = await ethers.getContractAt("IERC20", DAI_ADDRESS);
+    const uniTokenContract = await ethers.getContractAt("IERC20", UNI_ADDRESS);
     return {
       tokenVault,
       sushiTokenContract,
       sushiBarContract,
       daiTokenContract,
+      uniTokenContract,
       owner,
       user,
     };
@@ -431,7 +434,7 @@ describe("TokenVault", function () {
   });
 
   describe("Zap In", function () {
-    it("should swap other token to Sushi and convert them to xSushi and deposit in Token vault", async function () {
+    it("should swap desired token to Sushi and enter in SushiBar and deposit in xSushi vault", async function () {
       const { tokenVault, daiTokenContract, user } = await loadFixture(
         deployTokenVault
       );
@@ -461,6 +464,49 @@ describe("TokenVault", function () {
         .withArgs(deadAddress, user.address, BigInt("1098088063457495394"));
       const sharesBalance = await tokenVault.balanceOf(user.address);
       expect(sharesBalance).to.not.equal(balance);
+    });
+  });
+
+  describe("Zap Out", function () {
+    it("should leave xSushi vault and leave from SushiBar and swap for desired token", async function () {
+      const { tokenVault, daiTokenContract, uniTokenContract, user } = await loadFixture(
+        deployTokenVault
+      );
+      const impersonateAccount = "0xfc2eE3bD619B7cfb2dE2C797b96DeeCbD7F68e46";
+      const depositAmount = ethers.parseEther("1");
+
+      await network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [impersonateAccount],
+      });
+      const daiHolder = await ethers.getSigner(impersonateAccount);
+
+      await depositEth(user, impersonateAccount, "3");
+
+      await daiTokenContract
+        .connect(daiHolder)
+        .transfer(user.address, depositAmount);
+
+      const balance = await tokenVault.balanceOf(user.address); // the balance is 0
+
+      await daiTokenContract.connect(user).approve(tokenVault, depositAmount);
+
+      const deadAddress = "0x0000000000000000000000000000000000000000";
+
+      await expect(tokenVault.connect(user).zapIn(DAI_ADDRESS, depositAmount))
+        .to.emit(tokenVault, "Transfer")
+        .withArgs(deadAddress, user.address, BigInt("1098088063457495394"));
+      const sharesBalance = await tokenVault.balanceOf(user.address);
+      expect(sharesBalance).to.not.equal(balance);
+
+
+      await tokenVault.connect(user).zapOut(DAI_ADDRESS)
+      const daiBalance = await daiTokenContract.balanceOf(user.address);
+      const tokenVaultBalance = await tokenVault.balanceOf(user.address);
+      expect(daiBalance).to.not.equal(0);
+      expect(tokenVaultBalance).to.equal(0);
+      
+      
     });
   });
 });
