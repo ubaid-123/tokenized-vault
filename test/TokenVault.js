@@ -179,8 +179,7 @@ describe("TokenVault", function () {
   const SUSHI_ADDRESS = "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2";
   const FACTORY = "0xbACEB8eC6b9355Dfc0269C18bac9d6E2Bdc29C4F";
   const DAI_ADDRESS = "0x6b175474e89094c44da98b954eedeac495271d0f";
-  const UNI_ADDRESS = "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984";
-
+  
   async function depositEth(sender, recipient, amount) {
     const weiAmount = ethers.parseEther(String(amount));
 
@@ -215,13 +214,11 @@ describe("TokenVault", function () {
       SUSHI_BAR_ADDRESS
     );
     const daiTokenContract = await ethers.getContractAt("IERC20", DAI_ADDRESS);
-    const uniTokenContract = await ethers.getContractAt("IERC20", UNI_ADDRESS);
     return {
       tokenVault,
       sushiTokenContract,
       sushiBarContract,
       daiTokenContract,
-      uniTokenContract,
       owner,
       user,
     };
@@ -469,7 +466,7 @@ describe("TokenVault", function () {
 
   describe("Zap Out", function () {
     it("should leave xSushi vault and leave from SushiBar and swap for desired token", async function () {
-      const { tokenVault, daiTokenContract, uniTokenContract, user } = await loadFixture(
+      const { tokenVault, daiTokenContract, user } = await loadFixture(
         deployTokenVault
       );
       const impersonateAccount = "0xfc2eE3bD619B7cfb2dE2C797b96DeeCbD7F68e46";
