@@ -227,7 +227,7 @@ describe("TokenVault", function () {
     });
   });
   
-  describe("Deposit", function(){
+  describe("Deposit", async function(){
     it("should allow deposits and issue shares", async function () {
       const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
       const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
@@ -265,6 +265,52 @@ describe("TokenVault", function () {
         );
       const sharesBalance = await tokenVault.balanceOf(user.address);
       expect(sharesBalance).to.equal(shares);
+
+    });
+
+    it("should not allow deposits with zero xSushi balance", async function () {
+      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+      const depositAmount = ethers.parseEther("1");
+
+      await sushiBarContract
+        .connect(user)
+        .approve(tokenVault, depositAmount);
+      
+      await expect(
+        tokenVault.connect(user).deposit(depositAmount, user.address)
+      ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
+
+       
+      const sharesBalance = await tokenVault.balanceOf(user.address);
+      expect(sharesBalance).to.equal(0);
+
+    });
+
+    it("should not allow deposits without approving xSushi to Token Vault", async function () {
+      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+      const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
+      const depositAmount = ethers.parseEther("1");
+
+      await network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [impersonateAccount],
+      });
+      const xSushiHolder = await ethers.getSigner(
+        impersonateAccount
+      );
+      
+      await depositEth(user, impersonateAccount, "3");
+
+      await sushiBarContract
+        .connect(xSushiHolder)
+        .transfer(user.address, depositAmount);
+      
+      await expect(
+        tokenVault.connect(user).deposit(depositAmount, user.address)
+      ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
+      
+      const sharesBalance = await tokenVault.balanceOf(user.address);
+      expect(sharesBalance).to.equal(0);
 
     });
   })
