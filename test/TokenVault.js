@@ -313,5 +313,128 @@ describe("TokenVault", function () {
       expect(sharesBalance).to.equal(0);
 
     });
-  })
+  });
+
+  describe("Withdraw", async function(){
+    it("should allow withdraw", async function (){
+      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+      const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
+      const depositAmount = ethers.parseEther("1");
+
+      await network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [impersonateAccount],
+      });
+      const xSushiHolder = await ethers.getSigner(
+        impersonateAccount
+      );
+      
+      await depositEth(user, impersonateAccount, "3");
+
+      await sushiBarContract
+        .connect(xSushiHolder)
+        .transfer(user.address, depositAmount);
+      
+      await sushiBarContract
+        .connect(user)
+        .approve(tokenVault, depositAmount);
+      
+      const shares = await tokenVault.previewDeposit(depositAmount); 
+      
+      await expect(
+        tokenVault.connect(user).deposit(depositAmount, user.address)
+      )
+        .to.emit(tokenVault, "Deposit")
+        .withArgs(
+          user.address,
+          user.address,
+          depositAmount,
+          shares
+        );
+      const sharesBalance = await tokenVault.balanceOf(user.address);
+      expect(sharesBalance).to.equal(shares);
+
+      const previewShares = await tokenVault.previewWithdraw(shares);
+      await expect(
+        tokenVault.connect(user).withdraw(sharesBalance, user.address, user.address)
+      )
+        .to.emit(tokenVault, "Withdraw")
+        .withArgs(
+          user.address,
+          user.address,
+          user.address,
+          sharesBalance,
+          previewShares
+        );
+
+      const updatedSharesBalance = await tokenVault.balanceOf(user.address);
+      expect(updatedSharesBalance).to.equal(0);
+      
+      const updatedxSushiBalance = await sushiBarContract.balanceOf(user.address);
+      expect(updatedxSushiBalance).to.equal(ethers.parseEther("1"));
+        
+    });
+
+    it("should allow withdraw to other address", async function (){
+      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+      const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
+      const depositAmount = ethers.parseEther("1");
+
+      await network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [impersonateAccount],
+      });
+      const xSushiHolder = await ethers.getSigner(
+        impersonateAccount
+      );
+      
+      await depositEth(user, impersonateAccount, "3");
+
+     
+      await sushiBarContract
+        .connect(xSushiHolder)
+        .transfer(user.address, depositAmount);
+      
+      const beforeWithdrawXSushiBalance = await sushiBarContract.balanceOf(impersonateAccount);
+        
+      await sushiBarContract
+        .connect(user)
+        .approve(tokenVault, depositAmount);
+      
+      const shares = await tokenVault.previewDeposit(depositAmount); 
+      
+      await expect(
+        tokenVault.connect(user).deposit(depositAmount, user.address)
+      )
+        .to.emit(tokenVault, "Deposit")
+        .withArgs(
+          user.address,
+          user.address,
+          depositAmount,
+          shares
+        );
+      const sharesBalance = await tokenVault.balanceOf(user.address);
+      expect(sharesBalance).to.equal(shares);
+
+      const previewShares = await tokenVault.previewWithdraw(shares);
+      await expect(
+        tokenVault.connect(user).withdraw(sharesBalance, impersonateAccount, user.address)
+      )
+        .to.emit(tokenVault, "Withdraw")
+        .withArgs(
+          user.address,
+          impersonateAccount,
+          user.address,
+          sharesBalance,
+          previewShares
+        );
+
+      const updatedSharesBalance = await tokenVault.balanceOf(user.address);
+      expect(updatedSharesBalance).to.equal(0);
+      
+      const updatedxSushiBalance = await sushiBarContract.balanceOf(impersonateAccount);
+      const updatedBalance = beforeWithdrawXSushiBalance + depositAmount;
+      expect(updatedxSushiBalance).to.equal(updatedBalance);
+    });
+  });
 });
