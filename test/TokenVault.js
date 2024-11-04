@@ -3,7 +3,7 @@ const {
   loadFixture,
 } = require("@nomicfoundation/hardhat-toolbox/network-helpers");
 const { anyValue } = require("@nomicfoundation/hardhat-chai-matchers/withArgs");
-const { expect } = require("chai");
+const { expect, use } = require("chai");
 const { ethers, network } = require("hardhat");
 
 const xSushiABI = [
@@ -178,13 +178,14 @@ describe("TokenVault", function () {
   const WETH = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
   const SUSHI_ADDRESS = "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2";
   const FACTORY = "0xbACEB8eC6b9355Dfc0269C18bac9d6E2Bdc29C4F";
+  const DAI_ADDRESS = "0x6b175474e89094c44da98b954eedeac495271d0f";
 
   async function depositEth(sender, recipient, amount) {
     const weiAmount = ethers.parseEther(String(amount));
-  
+
     const tx = await sender.sendTransaction({
       to: recipient,
-      value: weiAmount
+      value: weiAmount,
     });
     await tx.wait();
   }
@@ -212,7 +213,15 @@ describe("TokenVault", function () {
       xSushiABI,
       SUSHI_BAR_ADDRESS
     );
-    return { tokenVault, sushiTokenContract, sushiBarContract, owner, user };
+    const daiTokenContract = await ethers.getContractAt("IERC20", DAI_ADDRESS);
+    return {
+      tokenVault,
+      sushiTokenContract,
+      sushiBarContract,
+      daiTokenContract,
+      owner,
+      user,
+    };
   }
 
   describe("Deployment", function () {
@@ -226,10 +235,12 @@ describe("TokenVault", function () {
       expect(await tokenVault.factory()).to.equal(FACTORY);
     });
   });
-  
-  describe("Deposit", async function(){
+
+  describe("Deposit", function () {
     it("should allow deposits and issue shares", async function () {
-      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+      const { tokenVault, sushiBarContract, user } = await loadFixture(
+        deployTokenVault
+      );
       const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
       const depositAmount = ethers.parseEther("1");
 
@@ -237,57 +248,47 @@ describe("TokenVault", function () {
         method: "hardhat_impersonateAccount",
         params: [impersonateAccount],
       });
-      const xSushiHolder = await ethers.getSigner(
-        impersonateAccount
-      );
-      
+      const xSushiHolder = await ethers.getSigner(impersonateAccount);
+
       await depositEth(user, impersonateAccount, "3");
 
       await sushiBarContract
         .connect(xSushiHolder)
         .transfer(user.address, depositAmount);
-      
-      await sushiBarContract
-        .connect(user)
-        .approve(tokenVault, depositAmount);
-      
-      const shares = await tokenVault.previewDeposit(depositAmount); 
-      
+
+      await sushiBarContract.connect(user).approve(tokenVault, depositAmount);
+
+      const shares = await tokenVault.previewDeposit(depositAmount);
+
       await expect(
         tokenVault.connect(user).deposit(depositAmount, user.address)
       )
         .to.emit(tokenVault, "Deposit")
-        .withArgs(
-          user.address,
-          user.address,
-          depositAmount,
-          shares
-        );
+        .withArgs(user.address, user.address, depositAmount, shares);
       const sharesBalance = await tokenVault.balanceOf(user.address);
       expect(sharesBalance).to.equal(shares);
-
     });
 
     it("should not allow deposits with zero xSushi balance", async function () {
-      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+      const { tokenVault, sushiBarContract, user } = await loadFixture(
+        deployTokenVault
+      );
       const depositAmount = ethers.parseEther("1");
 
-      await sushiBarContract
-        .connect(user)
-        .approve(tokenVault, depositAmount);
-      
+      await sushiBarContract.connect(user).approve(tokenVault, depositAmount);
+
       await expect(
         tokenVault.connect(user).deposit(depositAmount, user.address)
       ).to.be.revertedWith("ERC20: transfer amount exceeds balance");
 
-       
       const sharesBalance = await tokenVault.balanceOf(user.address);
       expect(sharesBalance).to.equal(0);
-
     });
 
     it("should not allow deposits without approving xSushi to Token Vault", async function () {
-      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+      const { tokenVault, sushiBarContract, user } = await loadFixture(
+        deployTokenVault
+      );
       const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
       const depositAmount = ethers.parseEther("1");
 
@@ -295,29 +296,28 @@ describe("TokenVault", function () {
         method: "hardhat_impersonateAccount",
         params: [impersonateAccount],
       });
-      const xSushiHolder = await ethers.getSigner(
-        impersonateAccount
-      );
-      
+      const xSushiHolder = await ethers.getSigner(impersonateAccount);
+
       await depositEth(user, impersonateAccount, "3");
 
       await sushiBarContract
         .connect(xSushiHolder)
         .transfer(user.address, depositAmount);
-      
+
       await expect(
         tokenVault.connect(user).deposit(depositAmount, user.address)
-      ).to.be.revertedWith("ERC20: transfer amount exceeds allowance")
-      
+      ).to.be.revertedWith("ERC20: transfer amount exceeds allowance");
+
       const sharesBalance = await tokenVault.balanceOf(user.address);
       expect(sharesBalance).to.equal(0);
-
     });
   });
 
-  describe("Withdraw", async function(){
-    it("should allow withdraw", async function (){
-      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+  describe("Withdraw", function () {
+    it("should allow withdraw", async function () {
+      const { tokenVault, sushiBarContract, user } = await loadFixture(
+        deployTokenVault
+      );
       const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
       const depositAmount = ethers.parseEther("1");
 
@@ -325,38 +325,31 @@ describe("TokenVault", function () {
         method: "hardhat_impersonateAccount",
         params: [impersonateAccount],
       });
-      const xSushiHolder = await ethers.getSigner(
-        impersonateAccount
-      );
-      
+      const xSushiHolder = await ethers.getSigner(impersonateAccount);
+
       await depositEth(user, impersonateAccount, "3");
 
       await sushiBarContract
         .connect(xSushiHolder)
         .transfer(user.address, depositAmount);
-      
-      await sushiBarContract
-        .connect(user)
-        .approve(tokenVault, depositAmount);
-      
-      const shares = await tokenVault.previewDeposit(depositAmount); 
-      
+
+      await sushiBarContract.connect(user).approve(tokenVault, depositAmount);
+
+      const shares = await tokenVault.previewDeposit(depositAmount);
+
       await expect(
         tokenVault.connect(user).deposit(depositAmount, user.address)
       )
         .to.emit(tokenVault, "Deposit")
-        .withArgs(
-          user.address,
-          user.address,
-          depositAmount,
-          shares
-        );
+        .withArgs(user.address, user.address, depositAmount, shares);
       const sharesBalance = await tokenVault.balanceOf(user.address);
       expect(sharesBalance).to.equal(shares);
 
       const previewShares = await tokenVault.previewWithdraw(shares);
       await expect(
-        tokenVault.connect(user).withdraw(sharesBalance, user.address, user.address)
+        tokenVault
+          .connect(user)
+          .withdraw(sharesBalance, user.address, user.address)
       )
         .to.emit(tokenVault, "Withdraw")
         .withArgs(
@@ -369,14 +362,17 @@ describe("TokenVault", function () {
 
       const updatedSharesBalance = await tokenVault.balanceOf(user.address);
       expect(updatedSharesBalance).to.equal(0);
-      
-      const updatedxSushiBalance = await sushiBarContract.balanceOf(user.address);
+
+      const updatedxSushiBalance = await sushiBarContract.balanceOf(
+        user.address
+      );
       expect(updatedxSushiBalance).to.equal(ethers.parseEther("1"));
-        
     });
 
-    it("should allow withdraw to other address", async function (){
-      const { tokenVault, sushiBarContract, user } = await loadFixture(deployTokenVault);
+    it("should allow withdraw to other address", async function () {
+      const { tokenVault, sushiBarContract, user } = await loadFixture(
+        deployTokenVault
+      );
       const impersonateAccount = "0x1949c2e8680F30220d863ab429c925aAA517A023";
       const depositAmount = ethers.parseEther("1");
 
@@ -384,41 +380,35 @@ describe("TokenVault", function () {
         method: "hardhat_impersonateAccount",
         params: [impersonateAccount],
       });
-      const xSushiHolder = await ethers.getSigner(
-        impersonateAccount
-      );
-      
+      const xSushiHolder = await ethers.getSigner(impersonateAccount);
+
       await depositEth(user, impersonateAccount, "3");
 
-     
       await sushiBarContract
         .connect(xSushiHolder)
         .transfer(user.address, depositAmount);
-      
-      const beforeWithdrawXSushiBalance = await sushiBarContract.balanceOf(impersonateAccount);
-        
-      await sushiBarContract
-        .connect(user)
-        .approve(tokenVault, depositAmount);
-      
-      const shares = await tokenVault.previewDeposit(depositAmount); 
-      
+
+      const beforeWithdrawXSushiBalance = await sushiBarContract.balanceOf(
+        impersonateAccount
+      );
+
+      await sushiBarContract.connect(user).approve(tokenVault, depositAmount);
+
+      const shares = await tokenVault.previewDeposit(depositAmount);
+
       await expect(
         tokenVault.connect(user).deposit(depositAmount, user.address)
       )
         .to.emit(tokenVault, "Deposit")
-        .withArgs(
-          user.address,
-          user.address,
-          depositAmount,
-          shares
-        );
+        .withArgs(user.address, user.address, depositAmount, shares);
       const sharesBalance = await tokenVault.balanceOf(user.address);
       expect(sharesBalance).to.equal(shares);
 
       const previewShares = await tokenVault.previewWithdraw(shares);
       await expect(
-        tokenVault.connect(user).withdraw(sharesBalance, impersonateAccount, user.address)
+        tokenVault
+          .connect(user)
+          .withdraw(sharesBalance, impersonateAccount, user.address)
       )
         .to.emit(tokenVault, "Withdraw")
         .withArgs(
@@ -431,10 +421,46 @@ describe("TokenVault", function () {
 
       const updatedSharesBalance = await tokenVault.balanceOf(user.address);
       expect(updatedSharesBalance).to.equal(0);
-      
-      const updatedxSushiBalance = await sushiBarContract.balanceOf(impersonateAccount);
+
+      const updatedxSushiBalance = await sushiBarContract.balanceOf(
+        impersonateAccount
+      );
       const updatedBalance = beforeWithdrawXSushiBalance + depositAmount;
       expect(updatedxSushiBalance).to.equal(updatedBalance);
+    });
+  });
+
+  describe("Zap In", function () {
+    it("should swap other token to Sushi and convert them to xSushi and deposit in Token vault", async function () {
+      const { tokenVault, daiTokenContract, user } = await loadFixture(
+        deployTokenVault
+      );
+      const impersonateAccount = "0xfc2eE3bD619B7cfb2dE2C797b96DeeCbD7F68e46";
+      const depositAmount = ethers.parseEther("1");
+
+      await network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [impersonateAccount],
+      });
+      const daiHolder = await ethers.getSigner(impersonateAccount);
+
+      await depositEth(user, impersonateAccount, "3");
+
+      await daiTokenContract
+        .connect(daiHolder)
+        .transfer(user.address, depositAmount);
+
+      const balance = await tokenVault.balanceOf(user.address); // the balance is 0
+
+      await daiTokenContract.connect(user).approve(tokenVault, depositAmount);
+
+      const deadAddress = "0x0000000000000000000000000000000000000000";
+
+      await expect(tokenVault.connect(user).zapIn(DAI_ADDRESS, depositAmount))
+        .to.emit(tokenVault, "Transfer")
+        .withArgs(deadAddress, user.address, BigInt("1098088063457495394"));
+      const sharesBalance = await tokenVault.balanceOf(user.address);
+      expect(sharesBalance).to.not.equal(balance);
     });
   });
 });
